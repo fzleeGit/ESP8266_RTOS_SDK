@@ -1,0 +1,26 @@
+#include <stdio.h>
+#include "esp_system.h"
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/event_groups.h"
+#include "esp_wifi.h"
+#include "nvs.h"
+#include "esp_event_loop.h"
+#include "esp_log.h"
+#include "esp_err.h"
+#include "internal/esp_wifi_internal.h"
+#include "nvs_flash.h"
+#include "rom/ets_sys.h"
+#include "driver/uart.h"
+#include "tcpip_adapter.h"
+#include "esp_smartconfig.h"
+#include "smartconfig_ack.h"
+#include "airkiss.h"
+#include "lwip/err.h"
+#include "lwip/sockets.h"
+#include "lwip/sys.h"
+#include <lwip/netdb.h>
+#include"AIR_airkissImplement.h"
