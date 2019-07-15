@@ -25,6 +25,7 @@
 #include <lwip/netdb.h>
 
 #include "BTN_buttonMgr.h"
+#include "WIFI_wifiMgr.h"
 
 /**
  *    由于 esp-idf esp8266芯片 rtos3.0 sdk 乐鑫没做微信近场发现的功能，于是动动手指做起来！
@@ -62,7 +63,7 @@ const airkiss_config_t akconf = {
     0,
 };
 
-static void taskUdpBrocastToWechat(void *pvParameters)
+static void taskUdpWithWechat(void *pvParameters)
 {
     char rx_buffer[128];
     //char addr_str[128];
@@ -146,28 +147,24 @@ static void taskUdpBrocastToWechat(void *pvParameters)
  * @param {type} 
  * @return: 
  */
-void shutDownAirkissTask()
+void shutDownAirkissTask(void)
 {
     shutdown(sock_fd, 0);
     close(sock_fd);
     vTaskDelete(&handleLlocalFind);
 }
 
-bool startAirkissTask()
+bool startAirkissUdpTask(void)
 {
     int ret = pdFAIL;
-    if (handleLlocalFind == NULL)
-        ret = xTaskCreate(taskUdpBrocastToWechat, "taskUdpBrocastToWechat", 1024 * 3, NULL, 4, &handleLlocalFind);
-
-    if (ret != pdPASS)
-    {
-        printf("create airkiss thread failed.\n");
-        return false;
+    if (handleLlocalFind == NULL) {
+        if(xTaskCreate(taskUdpWithWechat, "taskUdpWithWechat", configMINIMAL_STACK_SIZE * 3,\
+            NULL, configMAX_PRIORITIES - 10, &handleLlocalFind) != pdPASS) {
+            printf("create airkiss thread failed.\n");
+            return false;              
+        }
     }
-    else
-    {
-        return true;
-    }
+    return true;
 }
 
 void smartconfig_example_task(void *parm);
@@ -205,47 +202,48 @@ static void initialise_wifi(void)
     ESP_ERROR_CHECK(esp_wifi_start());
 }
 
+/**smart config callback */
 static void sc_callback(smartconfig_status_t status, void *pdata)
 {
-    switch (status)
-    {
-    case SC_STATUS_LINK:
-    {
-        wifi_config_t *wifi_config = pdata;
-        ESP_LOGI(TAG, "SSID:%s", wifi_config->sta.ssid);
-        ESP_LOGI(TAG, "PASSWORD:%s", wifi_config->sta.password);
-        ESP_ERROR_CHECK(esp_wifi_disconnect());
-        ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, wifi_config));
-        ESP_ERROR_CHECK(esp_wifi_connect());
-    }
-    break;
-    case SC_STATUS_LINK_OVER:
-        ESP_LOGI(TAG, "SC_STATUS_LINK_OVER");
-        //这里乐鑫回调目前在master分支已区分是否为微信配网还是esptouch配网，当airkiss配网才近场回调！
-        if (pdata != NULL)
+    switch (status) {
+        case SC_STATUS_LINK:
         {
-            sc_callback_data_t *sc_callback_data = (sc_callback_data_t *)pdata;
-            switch (sc_callback_data->type)
-            {
-            case SC_ACK_TYPE_ESPTOUCH:
-                ESP_LOGI(TAG, "Phone ip: %d.%d.%d.%d", sc_callback_data->ip[0], sc_callback_data->ip[1], sc_callback_data->ip[2], sc_callback_data->ip[3]);
-                ESP_LOGI(TAG, "TYPE: ESPTOUCH");
-                xEventGroupSetBits(wifi_event_group, ESPTOUCH_DONE_BIT);
-                break;
-            case SC_ACK_TYPE_AIRKISS:
-                ESP_LOGI(TAG, "TYPE: AIRKISS");
-                xEventGroupSetBits(wifi_event_group, AIRKISS_DONE_BIT);
-                break;
-            default:
-                ESP_LOGE(TAG, "TYPE: ERROR");
-                xEventGroupSetBits(wifi_event_group, ESPTOUCH_DONE_BIT);
-                break;
-            }
+            wifi_config_t *wifi_config = pdata;
+            ESP_LOGI(TAG, "SSID:%s", wifi_config->sta.ssid);
+            ESP_LOGI(TAG, "PASSWORD:%s", wifi_config->sta.password);
+            ESP_ERROR_CHECK(esp_wifi_disconnect());
+            ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, wifi_config));
+            ESP_ERROR_CHECK(esp_wifi_connect());
         }
+        break;
+        case SC_STATUS_LINK_OVER:
+            ESP_LOGI(TAG, "SC_STATUS_LINK_OVER");
+            //这里乐鑫回调目前在master分支已区分是否为微信配网还是esptouch配网，当airkiss配网才近场回调！
+            if (pdata != NULL)
+            {
+                sc_callback_data_t *sc_callback_data = (sc_callback_data_t *)pdata;
+                switch (sc_callback_data->type)
+                {
+                case SC_ACK_TYPE_ESPTOUCH:
+                    ESP_LOGI(TAG, "Phone ip: %d.%d.%d.%d", sc_callback_data->ip[0], sc_callback_data->ip[1], sc_callback_data->ip[2], sc_callback_data->ip[3]);
+                    ESP_LOGI(TAG, "TYPE: ESPTOUCH");
+                    xEventGroupSetBits(wifi_event_group, ESPTOUCH_DONE_BIT);
+                    break;
+                case SC_ACK_TYPE_AIRKISS:
+                    ESP_LOGI(TAG, "TYPE: AIRKISS");
 
-        break;
-    default:
-        break;
+                    xEventGroupSetBits(wifi_event_group, AIRKISS_DONE_BIT);
+                    break;
+                default:
+                    ESP_LOGE(TAG, "TYPE: ERROR");
+                    xEventGroupSetBits(wifi_event_group, ESPTOUCH_DONE_BIT);
+                    break;
+                }
+            }
+
+            break;
+        default:
+            break;
     }
 }
 
@@ -266,7 +264,7 @@ void smartconfig_example_task(void *parm)
         {
             ESP_LOGI(TAG, "smartconfig over , start find device");
             esp_smartconfig_stop();
-            startAirkissTask();
+            startAirkissUdpTask();
             ESP_LOGI(TAG, "getAirkissVersion %s", airkiss_version());
             vTaskDelete(NULL);
         }
@@ -313,5 +311,6 @@ void app_main(void)
     esp_read_mac(mac, ESP_MAC_WIFI_STA);
     printf("esp_read_mac(): %02x:%02x:%02x:%02x:%02x:%02x \n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     printf("--------------------------------------------------------------------------\n\n");
-    initialise_wifi();
+    //initialise_wifi();
+    WIFI_creatWifiInitTask();
 }

@@ -218,11 +218,13 @@ bool BTN_buttonIOInit(void)
     //create a queue to handle gpio event from isr
     gpio_evt_queue = xQueueCreate(1, sizeof(uint32_t));
     //start gpio task
-    if (xTaskCreate(keyTaskMgr, "keyTaskMgr", 2048, NULL, 10, NULL) != pdPASS) {
+    if(xTaskCreate(keyTaskMgr, "keyTaskMgr", configMINIMAL_STACK_SIZE * 3,\
+            NULL, configMAX_PRIORITIES - 5, NULL) != pdPASS) {
         ESP_LOGI(TAG,"create airkiss thread failed.\n");
         return false;
     }
-    if (xTaskCreate(IOTestTask, "IOTestTask", 2048, NULL, 10, NULL) != pdPASS) {
+    if(xTaskCreate(IOTestTask, "IOTestTask", configMINIMAL_STACK_SIZE * 3,\
+            NULL, configMAX_PRIORITIES - 5, NULL) != pdPASS) {
         ESP_LOGI(TAG,"create airkiss thread failed.\n");
         return false;
     }
