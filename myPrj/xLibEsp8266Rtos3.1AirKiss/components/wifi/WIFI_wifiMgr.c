@@ -53,9 +53,9 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
             esp_wifi_connect();
             break;
         case SYSTEM_EVENT_STA_GOT_IP:
-            ESP_LOGI(TAG, "got ip:%s",
-            ip4addr_ntoa(&event->event_info.got_ip.ip_info.ip));
-            xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);
+            ESP_LOGI(TAG, "got ip:%s",\
+                    ip4addr_ntoa(&event->event_info.got_ip.ip_info.ip));\
+                    xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);
             break;
         case SYSTEM_EVENT_AP_STACONNECTED:
             ESP_LOGI(TAG, "station:" MACSTR " join, AID=%d",\
@@ -123,33 +123,27 @@ void wifiInit(void *pvParameters)
     size_t size = 0;
 
     nvs_handle out_handle;
-    bool isGetSSID = false;
+    bool bGetSSID = false;
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
     //从本地存储读取是否存在ssid和password
-    if (nvs_open("wifi_info", NVS_READONLY, &out_handle) == ESP_OK)
-    {
+    if (nvs_open("wifi_info", NVS_READONLY, &out_handle) == ESP_OK) {
         wifi_config_t config;
         memset(&config, 0x0, sizeof(config));
         size = sizeof(config.sta.ssid);
-        if (nvs_get_str(out_handle, "ssid", (char *)config.sta.ssid, &size) == ESP_OK)
-        {
-            if (size > 0)
-            {
+        if (nvs_get_str(out_handle, "ssid", (char *)config.sta.ssid, &size) == ESP_OK) {
+            if (size > 0) {
                 size = sizeof(config.sta.password);
-                if (nvs_get_str(out_handle, "password", (char *)config.sta.password, &size) == ESP_OK)
-                {
+                if (nvs_get_str(out_handle, "password", (char *)config.sta.password, &size) == ESP_OK) {
                     ESP_LOGI(TAG, "-- get ssid: %s", config.sta.ssid);
                     ESP_LOGI(TAG, "-- get password: %s", config.sta.password);
-                    isGetSSID = true;
+                    bGetSSID = true;
                     ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &config));
                     ESP_ERROR_CHECK(esp_wifi_start());
-                }
-                else
-                {
+                } else {
                     ESP_LOGI(TAG, "--get password fail");
                 }
             }
@@ -157,13 +151,13 @@ void wifiInit(void *pvParameters)
         nvs_close(out_handle);
     }
 
-    if (!isGetSSID)
-    {
+    if (!bGetSSID) {
         ESP_LOGI(TAG, "--get ssid fail");
         wifi_config_t wifi_config = {
             .sta = {
                 .ssid = EXAMPLE_ESP_WIFI_SSID,
-                .password = EXAMPLE_ESP_WIFI_PASS},
+                .password = EXAMPLE_ESP_WIFI_PASS
+            },
         };
         funtion_wifi_save_info((unsigned char *)EXAMPLE_ESP_WIFI_SSID, (unsigned char *)EXAMPLE_ESP_WIFI_PASS);
 
@@ -172,15 +166,15 @@ void wifiInit(void *pvParameters)
     }
 
     ESP_LOGI(TAG, "wifi_init_sta finished.");
-    ESP_LOGI(TAG, "connect to ap SSID:%s password:%s",
-             EXAMPLE_ESP_WIFI_SSID, EXAMPLE_ESP_WIFI_PASS);
+    ESP_LOGI(TAG, "connect to ap SSID:%s password:%s",\
+                EXAMPLE_ESP_WIFI_SSID, EXAMPLE_ESP_WIFI_PASS);
     vTaskDelete(NULL);
 }
 
 bool WIFI_creatWifiInitTask(void)
 {
-    if (xTaskCreate(wifiInit, "wifiInit", 1024 * 10, NULL, 2, NULL) != pdPASS)
-    {
+    if (xTaskCreate(wifiInit, "wifiInit", configMINIMAL_STACK_SIZE * 10, NULL,\
+         configMAX_PRIORITIES - 13, NULL) != pdPASS) {
         printf("wifi init thread failed.\n");
         return false;
     }
