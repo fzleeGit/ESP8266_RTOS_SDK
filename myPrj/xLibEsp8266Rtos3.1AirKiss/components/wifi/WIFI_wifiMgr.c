@@ -53,22 +53,21 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
             esp_wifi_connect();
             break;
         case SYSTEM_EVENT_STA_GOT_IP:
-            ESP_LOGI(TAG, "got ip:%s",
-                    ip4addr_ntoa(&event->event_info.got_ip.ip_info.ip));
+            ESP_LOGI(TAG, "got ip:%s",\
+                    ip4addr_ntoa(&event->event_info.got_ip.ip_info.ip));\
                     xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);
             break;
         case SYSTEM_EVENT_AP_STACONNECTED:
-            ESP_LOGI(TAG, "station:" MACSTR " join, AID=%d",
-                    MAC2STR(event->event_info.sta_connected.mac),
+            ESP_LOGI(TAG, "station:" MACSTR " join, AID=%d",\
+                    MAC2STR(event->event_info.sta_connected.mac),\
                     event->event_info.sta_connected.aid);
             break;
         case SYSTEM_EVENT_AP_STADISCONNECTED:
-            ESP_LOGI(TAG, "station:" MACSTR "leave, AID=%d",
-                    MAC2STR(event->event_info.sta_disconnected.mac),
+            ESP_LOGI(TAG, "station:" MACSTR "leave, AID=%d",\
+                    MAC2STR(event->event_info.sta_disconnected.mac),\
                     event->event_info.sta_disconnected.aid);
             break;
         case SYSTEM_EVENT_STA_DISCONNECTED:
-            ESP_LOGI(TAG, "wifi disconnect.");   
             esp_wifi_connect();
             xEventGroupClearBits(wifi_event_group, WIFI_CONNECTED_BIT);
             break;
@@ -81,31 +80,20 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
 void funtion_wifi_clear_info(void)
 {
     nvs_handle out_handle;
-
-    //printf("--clear ssid fail");
     if (nvs_open("wifi_info", NVS_READWRITE, &out_handle) == ESP_OK)
     {
         nvs_erase_all(out_handle);
         nvs_close(out_handle);
-        ESP_LOGI(TAG, "clear wifi info in flash");
-        return;
     }
-    ESP_LOGI(TAG, "clear wifi info in flash fail");
 }
 
-void wifi_call_test(void)
-{
-    printf("test");
-}
+
 void funtion_wifi_save_info(uint8_t *ssid, uint8_t *password)
 {
     nvs_handle out_handle;
     char data[65];
-
-    //printf("--save ssid fail");
     if (nvs_open("wifi_info", NVS_READWRITE, &out_handle) != ESP_OK)
     {
-        //ESP_LOGI(TAG, "save wifi info in flash fail");
         return;
     }
 
@@ -123,7 +111,6 @@ void funtion_wifi_save_info(uint8_t *ssid, uint8_t *password)
         printf("--set password fail");
     }
     nvs_close(out_handle);
-    //ESP_LOGI(TAG, "save wifi info in flash");
 }
 
 void wifiInit(void *pvParameters)
@@ -151,8 +138,8 @@ void wifiInit(void *pvParameters)
             if (size > 0) {
                 size = sizeof(config.sta.password);
                 if (nvs_get_str(out_handle, "password", (char *)config.sta.password, &size) == ESP_OK) {
-                    ESP_LOGI(TAG, "-- get flash ssid: %s", config.sta.ssid);
-                    ESP_LOGI(TAG, "-- get flash password: %s", config.sta.password);
+                    ESP_LOGI(TAG, "-- get ssid: %s", config.sta.ssid);
+                    ESP_LOGI(TAG, "-- get password: %s", config.sta.password);
                     bGetSSID = true;
                     ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &config));
                     ESP_ERROR_CHECK(esp_wifi_start());
@@ -164,10 +151,8 @@ void wifiInit(void *pvParameters)
         nvs_close(out_handle);
     }
 
-
     if (!bGetSSID) {
-        ESP_LOGI(TAG, "--get flash ssid fail");
-        
+        ESP_LOGI(TAG, "--get ssid fail");
         wifi_config_t wifi_config = {
             .sta = {
                 .ssid = EXAMPLE_ESP_WIFI_SSID,
@@ -181,23 +166,20 @@ void wifiInit(void *pvParameters)
     }
 
     ESP_LOGI(TAG, "wifi_init_sta finished.");
-    /*
-    ESP_LOGI(TAG, "connect to ap SSID:%s password:%s",
-                EXAMPLE_ESP_WIFI_SSID, EXAMPLE_ESP_WIFI_PASS);*/
+    ESP_LOGI(TAG, "connect to ap SSID:%s password:%s",\
+                EXAMPLE_ESP_WIFI_SSID, EXAMPLE_ESP_WIFI_PASS);
     vTaskDelete(NULL);
 }
 
 bool WIFI_creatWifiInitTask(void)
 {
-    if (xTaskCreate(wifiInit, "wifiInit", configMINIMAL_STACK_SIZE * 12, NULL,
+    if (xTaskCreate(wifiInit, "wifiInit", configMINIMAL_STACK_SIZE * 10, NULL,\
          configMAX_PRIORITIES - 13, NULL) != pdPASS) {
         printf("wifi init thread failed.\n");
-        ESP_LOGI(TAG, "[APP] Free memory: %d bytes", esp_get_free_heap_size());
         return false;
     }
     return true;
 }
-
 
 /* 
 void app_main()
