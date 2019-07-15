@@ -21,6 +21,7 @@
 #include "esp_system.h"
 #include "UTL_digitalInputFilter.h"
 #include "BTN_buttonMgr.h"
+#include "WIFI_wifiMgr.h"
 
 #define PLUG_PWR_BTN_IO 	    GPIO_NUM_14
 #define GPIO_INPUT_PIN_SEL      (1ULL<<PLUG_PWR_BTN_IO)    //((1ULL<<GPIO_OUTPUT_IO_0) | (1ULL<<GPIO_OUTPUT_IO_1))
@@ -128,8 +129,12 @@ static void keyTaskMgr(void *arg)
 
         if(BTN_bIsBTNLongPressed(&tBTNPowerStatus) == true) {
             ESP_LOGI(TAG, "Long press\n");
+            funtion_wifi_clear_info();
         } else if(BTN_bIsBTNGlitchHigh(&tBTNPowerStatus) == true) {
             ESP_LOGI(TAG, "key Glitch\n");
+            ESP_LOGI(TAG, "[APP] Free memory: %d bytes", esp_get_free_heap_size());
+            //wifi_call_test();
+            //funtion_wifi_save_info((unsigned char *)"OP", (unsigned char *)"888888888");
         }
 
     }
