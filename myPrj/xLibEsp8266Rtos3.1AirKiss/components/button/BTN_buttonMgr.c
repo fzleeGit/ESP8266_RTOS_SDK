@@ -21,19 +21,24 @@
 #include "esp_system.h"
 #include "UTL_digitalInputFilter.h"
 #include "BTN_buttonMgr.h"
+#include "WIFI_wifiMgr.h"
 
-#define PLUG_PWR_BTN_IO 	    GPIO_NUM_14
+#define PLUG_PWR_BTN_IO 	    GPIO_NUM_15
 #define GPIO_INPUT_PIN_SEL      (1ULL<<PLUG_PWR_BTN_IO)    //((1ULL<<GPIO_OUTPUT_IO_0) | (1ULL<<GPIO_OUTPUT_IO_1))
 #define PLUG_PWR_BTN_STATE()    (gpio_get_level(PLUG_PWR_BTN_IO))
 
-#define PLUG_USR_LED_IO 	    GPIO_NUM_5
-#define GPIO_OUTPUT_PIN_SEL     (1ULL<<PLUG_USR_LED_IO)    //((1ULL<<GPIO_OUTPUT_IO_0) | (1ULL<<GPIO_OUTPUT_IO_1))
+#define PLUG_RELAY_IO 	        GPIO_NUM_4
+#define PLUG_RED_LED_IO 	    GPIO_NUM_0
+#define PLUG_GREEN_LED_IO 	    GPIO_NUM_2
+#define GPIO_OUTPUT_PIN_SEL     (1ULL<<PLUG_GREEN_LED_IO | 1ULL<<PLUG_RED_LED_IO  | 1ULL<<PLUG_RELAY_IO)    //((1ULL<<GPIO_OUTPUT_IO_0) | (1ULL<<GPIO_OUTPUT_IO_1))
 
 #define INPUT_PIN_FILTER_TIME   (50 / portTICK_RATE_MS)     //so very PIN_FILTER_TIME x PIN_FILTER_CALL_TIME pin state will update once
 #define PWR_BTN_LONG_PRESS_CNT  (4000 / portTICK_RATE_MS)   // long press confirm time
 #define BTN_TASK_CALL_TIME      (1 / portTICK_RATE_MS)                           //ms
 
 
+#define EXAMPLE_ESP_WIFI_SSID "OP"
+#define EXAMPLE_ESP_WIFI_PASS "888888888"
 
 static const char *TAG = "keyMgr";
 static xQueueHandle gpio_evt_queue = NULL;
@@ -44,12 +49,12 @@ static int nKeyLastPressTime = 0;
 BTN_ButtonStatus tBTNPowerStatus;
 
 
-
+extern void smartconfig_example_task(void *parm);
 
 /*----------------------------------------------------------------------------*/
 /*                          private functions section                         */
 /*----------------------------------------------------------------------------*/
-static bool bIsPowerBtnPressed(void)          {return (PLUG_PWR_BTN_STATE() == false);} 
+static bool bIsPowerBtnPressed(void)          {return (PLUG_PWR_BTN_STATE() == true);} 
 static UTL_DigitalInputFilter_t tBTNPower    = {0, 0, bIsPowerBtnPressed};
 
 bool BTN_bIsBTNGlitchHigh(BTN_ButtonStatus *tBTNStatus)
@@ -128,48 +133,24 @@ static void keyTaskMgr(void *arg)
 
         if(BTN_bIsBTNLongPressed(&tBTNPowerStatus) == true) {
             ESP_LOGI(TAG, "Long press\n");
+            printf("esp_get_free_heap_size : %d  \n", esp_get_free_heap_size());
+            if(xTaskCreate(smartconfig_example_task, "smartconfig_example_task", configMINIMAL_STACK_SIZE * 6,
+                    NULL, configMAX_PRIORITIES - 12, NULL) != pdPASS) {
+                ESP_LOGI(TAG,"create smartconfig_example_task thread failed.\n");
+                return false;
+            }
+            printf("esp_get_free_heap_size : %d  \n", esp_get_free_heap_size());
+            //xTaskCreate(smartconfig_example_task, "smartconfig_example_task", 4096, NULL, 3, NULL);
+            //ESP_LOGI(TAG, "start to reset\n");
+            //WIFI_clearWifiInfoinFlash();
+            //vTaskDelay(3000 / portTICK_RATE_MS);
+            //esp_restart();
         } else if(BTN_bIsBTNGlitchHigh(&tBTNPowerStatus) == true) {
             ESP_LOGI(TAG, "key Glitch\n");
+            WIFI_clearWifiInfoinFlash();
+            //WIFI_saveWifiInfoToFlash((unsigned char *)EXAMPLE_ESP_WIFI_SSID, (unsigned char *)EXAMPLE_ESP_WIFI_PASS);
         }
 
-    }
-
-    //printf("Enter key task\n");
-    for (;;) {
-        if (xQueueReceive(gpio_evt_queue, &io_num, portMAX_DELAY)) {
-            ESP_LOGI(TAG, "GPIO[%d] intr, val: %d\n", io_num, gpio_get_level(io_num));
-            //记录下用户按下按键的时间点
-        if (gpio_get_level(io_num) == 0) {
-            bKeyPress = pdTRUE;
-            nKeyLastPressTime = esp_log_timestamp(); 
-            printf("presstime_first:%d \n", nKeyLastPressTime);
-            //如果当前GPIO口的电平已经记录为按下，则开始减去上次按下按键的时间点
-        } else if (bKeyPress) {
-            //记录抬升时间点
-            bKeyNotPress = pdTRUE;
-            
-            printf("presstime_2nd:%d \n", esp_log_timestamp());
-            nKeyLastPressTime = esp_log_timestamp() - nKeyLastPressTime;
-        }
-            //printf("Enter key task222\n");
-        }
-
-        //仅仅当按下标志位和按键弹起标志位都为1时候，才执行回调
-        if (bKeyPress & bKeyNotPress) {
-            bKeyPress = pdFALSE;
-            bKeyNotPress = pdFALSE;
-            printf("presstime:%d \n", nKeyLastPressTime);
-
-            //如果大于1s则回调长按，否则就短按回调
-            if (nKeyLastPressTime > (5000 / portTICK_RATE_MS)) {
-                printf("KEY_LONG_PRESS");
-                //return KEY_LONG_PRESS;
-            } else {
-                printf("KEY_SHORT_PRESS");
-                //return KEY_SHORT_PRESS;
-            }
-        }
-        //vTaskDelay(1 / portTICK_RATE_MS);
     }
 }
 
@@ -177,11 +158,14 @@ static void IOTestTask(void *arg)
 {
     int cnt = 0;
 
+    gpio_set_level(PLUG_RED_LED_IO, 1);
+    gpio_set_level(PLUG_RELAY_IO, 0);
     while (1) {
         //ESP_LOGI(TAG, "cnt: %d\n", cnt++);
         cnt++;
-        vTaskDelay(1000 / portTICK_RATE_MS);
-        gpio_set_level(PLUG_USR_LED_IO, cnt % 2);
+        vTaskDelay(500 / portTICK_RATE_MS);
+        //gpio_set_level(PLUG_RED_LED_IO, cnt % 2);
+        gpio_set_level(PLUG_GREEN_LED_IO, cnt % 2);
         //gpio_set_level(GPIO_OUTPUT_IO_1, cnt % 2);
     }
 }

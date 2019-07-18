@@ -39,7 +39,7 @@
  *
  * 
  **/
-
+/* 
 static EventGroupHandle_t wifi_event_group;
 static const int CONNECTED_BIT = BIT0;
 static const int ESPTOUCH_DONE_BIT = BIT1;
@@ -71,7 +71,7 @@ static void taskUdpWithWechat(void *pvParameters)
     uint16_t lan_buf_len;
     struct sockaddr_in server_addr;
     //struct sockaddr_in client_addr;
-    int sock_server; /* server socked */
+    int sock_server;
     int err;
     //int counts = 0;
 
@@ -142,11 +142,7 @@ static void taskUdpWithWechat(void *pvParameters)
         }
     }
 }
-/**
- * @description: 关闭进程
- * @param {type} 
- * @return: 
- */
+
 void shutDownAirkissTask(void)
 {
     shutdown(sock_fd, 0);
@@ -202,7 +198,7 @@ static void initialise_wifi(void)
     ESP_ERROR_CHECK(esp_wifi_start());
 }
 
-/**smart config callback */
+
 static void sc_callback(smartconfig_status_t status, void *pdata)
 {
     switch (status) {
@@ -211,6 +207,7 @@ static void sc_callback(smartconfig_status_t status, void *pdata)
             wifi_config_t *wifi_config = pdata;
             ESP_LOGI(TAG, "SSID:%s", wifi_config->sta.ssid);
             ESP_LOGI(TAG, "PASSWORD:%s", wifi_config->sta.password);
+            WIFI_saveWifiInfoToFlash((unsigned char *)wifi_config->sta.ssid, (unsigned char *)wifi_config->sta.password);
             ESP_ERROR_CHECK(esp_wifi_disconnect());
             ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, wifi_config));
             ESP_ERROR_CHECK(esp_wifi_connect());
@@ -252,6 +249,8 @@ void smartconfig_example_task(void *parm)
     EventBits_t uxBits;
     ESP_ERROR_CHECK(esp_smartconfig_set_type(SC_TYPE_ESPTOUCH_AIRKISS));
     ESP_ERROR_CHECK(esp_smartconfig_start(sc_callback));
+    vTaskDelay(1000 / portTICK_RATE_MS);
+    ESP_LOGI(TAG, "smartconfig start , start find device");
     while (1)
     {
         uxBits = xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT | ESPTOUCH_DONE_BIT | AIRKISS_DONE_BIT, true, false, portMAX_DELAY);
@@ -277,7 +276,7 @@ void smartconfig_example_task(void *parm)
         }
     }
 }
-
+*/
 /******************************************************************************
  * FunctionName : app_main
  * Description  : entry of user application, init user function here
