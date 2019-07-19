@@ -207,12 +207,13 @@ bool BTN_buttonIOInit(void)
         ESP_LOGI(TAG,"create airkiss thread failed.\n");
         return false;
     }
+    /* 
     if(xTaskCreate(IOTestTask, "IOTestTask", configMINIMAL_STACK_SIZE * 3,\
             NULL, configMAX_PRIORITIES - 5, NULL) != pdPASS) {
         ESP_LOGI(TAG,"create airkiss thread failed.\n");
         return false;
     }
-
+    */
     //install gpio isr service
     gpio_install_isr_service(0);
     //hook isr handler for specific gpio pin

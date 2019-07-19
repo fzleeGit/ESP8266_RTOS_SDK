@@ -26,6 +26,7 @@
 
 #include "BTN_buttonMgr.h"
 #include "WIFI_wifiMgr.h"
+#include "LED_ledMgr.h"
 
 /**
  *    由于 esp-idf esp8266芯片 rtos3.0 sdk 乐鑫没做微信近场发现的功能，于是动动手指做起来！
@@ -295,6 +296,7 @@ void app_main(void)
     ESP_ERROR_CHECK(ret);
 
     BTN_buttonIOInit();
+    LED_ledMgrInit();
 
     printf("\n\n-------------------------------- Get Systrm Info------------------------------------------\n");
     //获取IDF版本

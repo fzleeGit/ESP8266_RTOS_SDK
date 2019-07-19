@@ -3,6 +3,7 @@
 
 
 #include <stdint.h>
+#include "freertos/FreeRTOS.h"
 /********************************************************************************************************************************
 static void clrLedPower(void) 	{	CLR_LED_POWER(); }
 static void setLedPower(void) 	{	SET_LED_POWER(); }
@@ -17,7 +18,7 @@ UTL_manageLed(&tLedPower);
 *********************************************************************************************************************************/
 
 //User need to modify
-#define TICKS_PER_SEC           1000         //the thread calling time. user need to modify this value according to your systerm.     
+#define TICKS_PER_SEC           portTICK_RATE_MS * 1000         //the thread calling time. user need to modify this value according to your systerm.     
 #define TLED	                300			/* period (ms) in which led is on/off during a blink signaling */
 #define TPAUSE	                1800	    /* time (ms) in which led is off before a code start */      
 //end User need to modify 

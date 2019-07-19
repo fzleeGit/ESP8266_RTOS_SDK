@@ -45,7 +45,7 @@ static EventGroupHandle_t wifi_event_group;
    to the AP with an IP? */
 //static const int WIFI_CONNECTED_BIT = BIT0;
 static const char *TAG = "Wifi_Mgr";
-
+static const char *pNVSTagWifiInfo = "wifi_info";
 
 static const int CONNECTED_BIT = BIT0;
 static const int ESPTOUCH_DONE_BIT = BIT1;
@@ -61,6 +61,8 @@ static bool bGetSSID = false;
 #define ACCOUNT_ID "gh_083fe269017c" //微信公众号
 #define LOCAL_UDP_PORT 12476         //固定端口号
 uint8_t deviceInfo[60] = {"5351722"};  //设备ID，也可以任意设置。
+
+WIFI_Smartconfig_Status tSmartconfigStatus = WIFI_NOT_SC;
 
 int sock_fd;
 
@@ -167,7 +169,7 @@ bool startAirkissUdpTask(void)
 {
     int ret = pdFAIL;
     if (handleLlocalFind == NULL) {
-        if(xTaskCreate(taskUdpWithWechat, "taskUdpWithWechat", configMINIMAL_STACK_SIZE * 3,\
+        if(xTaskCreate(taskUdpWithWechat, "taskUdpWithWechat", configMINIMAL_STACK_SIZE * 3,
             NULL, configMAX_PRIORITIES - 10, &handleLlocalFind) != pdPASS) {
             printf("create airkiss thread failed.\n");
             return false;              
@@ -236,6 +238,7 @@ static void sc_callback(smartconfig_status_t status, void *pdata)
         case SC_STATUS_LINK:
         {
             wifi_config_t *wifi_config = pdata;
+            tSmartconfigStatus = WIFI_IN_SC;
             ESP_LOGI(TAG, "SSID:%s", wifi_config->sta.ssid);
             ESP_LOGI(TAG, "PASSWORD:%s", wifi_config->sta.password);
             WIFI_saveWifiInfoToFlash((unsigned char *)wifi_config->sta.ssid, (unsigned char *)wifi_config->sta.password);
@@ -281,6 +284,7 @@ void smartconfig_example_task(void *parm)
     ESP_ERROR_CHECK(esp_smartconfig_set_type(SC_TYPE_ESPTOUCH_AIRKISS));
     ESP_ERROR_CHECK(esp_smartconfig_start(sc_callback));
     vTaskDelay(1000 / portTICK_RATE_MS);
+    tSmartconfigStatus = WIFI_WAIT_SC;
     ESP_LOGI(TAG, "smartconfig start , start find device");
     while (1)
     {
@@ -292,6 +296,7 @@ void smartconfig_example_task(void *parm)
 
         if (uxBits & AIRKISS_DONE_BIT)
         {
+            tSmartconfigStatus = WIFI_NOT_SC;
             ESP_LOGI(TAG, "smartconfig over , start find device");
             esp_smartconfig_stop();
             startAirkissUdpTask();
@@ -344,7 +349,7 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
 void WIFI_clearWifiInfoinFlash(void)
 {
     nvs_handle out_handle;
-    if (nvs_open("wifi_info", NVS_READWRITE, &out_handle) == ESP_OK)
+    if (nvs_open(pNVSTagWifiInfo, NVS_READWRITE, &out_handle) == ESP_OK)
     {
         nvs_erase_all(out_handle);
         nvs_close(out_handle);
@@ -356,7 +361,8 @@ void WIFI_saveWifiInfoToFlash(uint8_t *ssid, uint8_t *password)
 {
     nvs_handle out_handle;
     char data[65];
-    if (nvs_open("wifi_info", NVS_READWRITE, &out_handle) != ESP_OK)
+    
+    if (nvs_open(pNVSTagWifiInfo, NVS_READWRITE, &out_handle) != ESP_OK)
     {
         return;
     }
@@ -393,8 +399,8 @@ void wifiInit(void *pvParameters)
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
     //ESP_ERROR_CHECK(esp_wifi_start());
  
-    //从本地存储读取是否存在ssid和password
-    if (nvs_open("wifi_info", NVS_READONLY, &out_handle) == ESP_OK) {
+    //从本地存储读取是否存在ssid和password, 若不存在，进入smartconfig 模式
+    if (nvs_open(pNVSTagWifiInfo, NVS_READONLY, &out_handle) == ESP_OK) {
         wifi_config_t config;
         memset(&config, 0x0, sizeof(config));
         size = sizeof(config.sta.ssid);
@@ -436,8 +442,14 @@ void wifiInit(void *pvParameters)
     vTaskDelete(NULL);
 }
 
+esp_err_t erroTest(void)
+{
+    return ESP_FAIL;
+}
+
 bool WIFI_creatWifiInitTask(void)
 {
+    ESP_ERROR_CHECK(erroTest());
     if (xTaskCreate(wifiInit, "wifiInit", configMINIMAL_STACK_SIZE * 6, NULL,\
          configMAX_PRIORITIES - 13, NULL) != pdPASS) {
         printf("wifi init thread failed.\n");
@@ -446,6 +458,10 @@ bool WIFI_creatWifiInitTask(void)
     return true;
 }
 
+WIFI_Smartconfig_Status WIFI_tGetSmartConfigStatus(void)
+{
+    return tSmartconfigStatus;
+}
 /* 
 void app_main()
 {
