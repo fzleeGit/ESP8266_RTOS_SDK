@@ -23,11 +23,11 @@
 #include "UTL_ledMgr.h"
 #include "LED_ledMgr.h"
 #include "WIFI_wifiMgr.h"
-
+#include "OTA_otaHttpMgr.h"
 
 #define PLUG_RELAY_IO 	        GPIO_NUM_4
-#define PLUG_RED_LED_IO 	    GPIO_NUM_0
-#define PLUG_GREEN_LED_IO 	    GPIO_NUM_2
+#define PLUG_RED_LED_IO 	    GPIO_NUM_2
+#define PLUG_GREEN_LED_IO 	    GPIO_NUM_0
 #define GPIO_OUTPUT_PIN_SEL     (1ULL<<PLUG_GREEN_LED_IO | 1ULL<<PLUG_RED_LED_IO  | 1ULL<<PLUG_RELAY_IO)    //((1ULL<<GPIO_OUTPUT_IO_0) | (1ULL<<GPIO_OUTPUT_IO_1))
 
 /* blink codes (for frequencies) */
@@ -54,6 +54,7 @@ static void setLedPower(void) 	{	gpio_set_level(PLUG_GREEN_LED_IO, 0); }
 static UTL_LEDHANDLE tLedStatus = { 0, 0, 0, 0, 0, 0, clrLedStatus, setLedStatus, togLedStatus } ;
 static const char *TAG = "led_Mgr";
 
+static bool bLedStatusFlag = false;
 
 static void toggleIO(gpio_num_t tIONum, bool* bIOState)
 {
@@ -80,8 +81,19 @@ static void ledTask(void *arg)
             } else {
                 DO_LED_STATUS(FREQ_START_SC);
             }
+        } else if(OTA_getOtaEnableFlag() == 1) {
+            DO_LED_STATUS(FREQ_START_SC);
+        } else if(OTA_getOtaEnableFlag() == 2) {
+            DO_LED_STATUS(EV_LED_ON);
         } else {
             DO_LED_STATUS(EV_LED_OFF);
+            /*
+            if(bLedStatusFlag) {
+                DO_LED_STATUS(EV_LED_ON);
+            } else {
+                DO_LED_STATUS(EV_LED_OFF);        
+            }
+             */
             //TODO LED ON/OFF by relay status
         }
         UTL_manageLed(&tLedStatus);
@@ -112,4 +124,9 @@ void LED_ledMgrInit(void)
         ESP_LOGI(TAG,"create airkiss thread failed.\n");
         return false;
     }
+}
+
+void LED_setLedStatus(bool bOnOff)
+{
+    bLedStatusFlag = bOnOff;
 }

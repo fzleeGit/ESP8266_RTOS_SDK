@@ -22,15 +22,13 @@
 #include "UTL_digitalInputFilter.h"
 #include "BTN_buttonMgr.h"
 #include "WIFI_wifiMgr.h"
+#include "RELAY_relayMgr.h"
+#include "LED_ledMgr.h"
+#include "OTA_otaHttpMgr.h"
 
 #define PLUG_PWR_BTN_IO 	    GPIO_NUM_15
 #define GPIO_INPUT_PIN_SEL      (1ULL<<PLUG_PWR_BTN_IO)    //((1ULL<<GPIO_OUTPUT_IO_0) | (1ULL<<GPIO_OUTPUT_IO_1))
 #define PLUG_PWR_BTN_STATE()    (gpio_get_level(PLUG_PWR_BTN_IO))
-
-#define PLUG_RELAY_IO 	        GPIO_NUM_4
-#define PLUG_RED_LED_IO 	    GPIO_NUM_0
-#define PLUG_GREEN_LED_IO 	    GPIO_NUM_2
-#define GPIO_OUTPUT_PIN_SEL     (1ULL<<PLUG_GREEN_LED_IO | 1ULL<<PLUG_RED_LED_IO  | 1ULL<<PLUG_RELAY_IO)    //((1ULL<<GPIO_OUTPUT_IO_0) | (1ULL<<GPIO_OUTPUT_IO_1))
 
 #define INPUT_PIN_FILTER_TIME   (50 / portTICK_RATE_MS)     //so very PIN_FILTER_TIME x PIN_FILTER_CALL_TIME pin state will update once
 #define PWR_BTN_LONG_PRESS_CNT  (4000 / portTICK_RATE_MS)   // long press confirm time
@@ -45,6 +43,7 @@ static xQueueHandle gpio_evt_queue = NULL;
 static bool bKeyPress = false;
 static bool bKeyNotPress = false;
 static int nKeyLastPressTime = 0;
+static bool bRelayOn = false;
 
 BTN_ButtonStatus tBTNPowerStatus;
 
@@ -65,6 +64,14 @@ bool BTN_bIsBTNGlitchHigh(BTN_ButtonStatus *tBTNStatus)
     return bRet;
 }
 
+bool BTN_bIsBTNGlitchLow(BTN_ButtonStatus *tBTNStatus)
+{
+    bool bRet = tBTNStatus->BF.bIsBTNGlitchLow;
+    tBTNStatus->BF.bIsBTNGlitchLow = false;
+    
+    return bRet;
+}
+
 bool BTN_bIsBTNLongPressed(BTN_ButtonStatus *tBTNStatus)
 {
     static bool bIsBtnPressed = false;
@@ -81,6 +88,8 @@ bool BTN_bIsBTNLongPressed(BTN_ButtonStatus *tBTNStatus)
 
     if(tBTNStatus->BF.bIsBTNLongPressed == true) {
         tBTNStatus->BF.bIsBTNLongPressed = false;
+        tBTNPowerStatus.BF.bIsBTNGlitchHigh = false;
+        tBTNPowerStatus.BF.bIsBTNGlitchLow = false;
         tBTNStatus->BF.unLongPressedCnt = 0;
     }
     
@@ -118,6 +127,8 @@ static void gpio_isr_handler(void *arg)
 static void keyTaskMgr(void *arg)
 {
     uint32_t io_num;
+    static bool bLedState = false;
+    WIFI_Smartconfig_Status tSmartConfigStatus;
     //int lastLevel = 0;
 
     for (;;) {
@@ -130,36 +141,49 @@ static void keyTaskMgr(void *arg)
         UTL_bDigitalInputFilter(&tBTNPower, INPUT_PIN_FILTER_TIME);
         buttonStatus(&tBTNPower, & tBTNPowerStatus, PWR_BTN_LONG_PRESS_CNT);
         vTaskDelay(1 / portTICK_RATE_MS);
-
+ 
         if(BTN_bIsBTNLongPressed(&tBTNPowerStatus) == true) {
             ESP_LOGI(TAG, "Long press\n");
-            printf("esp_get_free_heap_size : %d  \n", esp_get_free_heap_size());
-            if(xTaskCreate(smartconfig_example_task, "smartconfig_example_task", configMINIMAL_STACK_SIZE * 6,
-                    NULL, configMAX_PRIORITIES - 12, NULL) != pdPASS) {
-                ESP_LOGI(TAG,"create smartconfig_example_task thread failed.\n");
-                return false;
-            }
-            printf("esp_get_free_heap_size : %d  \n", esp_get_free_heap_size());
+            OTA_setOtaEnableFlag();
             //xTaskCreate(smartconfig_example_task, "smartconfig_example_task", 4096, NULL, 3, NULL);
             //ESP_LOGI(TAG, "start to reset\n");
             //WIFI_clearWifiInfoinFlash();
             //vTaskDelay(3000 / portTICK_RATE_MS);
             //esp_restart();
-        } else if(BTN_bIsBTNGlitchHigh(&tBTNPowerStatus) == true) {
-            ESP_LOGI(TAG, "key Glitch\n");
-            WIFI_clearWifiInfoinFlash();
-            //WIFI_saveWifiInfoToFlash((unsigned char *)EXAMPLE_ESP_WIFI_SSID, (unsigned char *)EXAMPLE_ESP_WIFI_PASS);
+        } else if(tBTNPowerStatus.BF.bIsBTNPressed != true){
+            if(BTN_bIsBTNGlitchHigh(&tBTNPowerStatus) == true) {
+                ESP_LOGI(TAG, "key Glitch\n");
+                printf("esp_get_free_heap_size : %d  \n", esp_get_free_heap_size());
+                tSmartConfigStatus = WIFI_tGetSmartConfigStatus();
+                if(tSmartConfigStatus == WIFI_NOT_SC) {
+                    if(xTaskCreate(smartconfig_example_task, "smartconfig_example_task", configMINIMAL_STACK_SIZE * 6,
+                            NULL, configMAX_PRIORITIES - 12, NULL) != pdPASS) {
+                        ESP_LOGI(TAG,"create smartconfig_example_task thread failed.\n");
+                        return false;
+                    }
+                    printf("esp_get_free_heap_size : %d  \n", esp_get_free_heap_size());
+                }
+                //WIFI_clearWifiInfoinFlash();
+                if(bLedState) {
+                    bLedState = false;
+                } else {
+                    bLedState = true;
+                }
+                LED_setLedStatus(bLedState);
+                //RELAY_relayCtlMgr();
+                //WIFI_saveWifiInfoToFlash((unsigned char *)EXAMPLE_ESP_WIFI_SSID, (unsigned char *)EXAMPLE_ESP_WIFI_PASS);
+            }
         }
+        
 
     }
 }
-
+/* 
 static void IOTestTask(void *arg)
 {
     int cnt = 0;
 
     gpio_set_level(PLUG_RED_LED_IO, 1);
-    gpio_set_level(PLUG_RELAY_IO, 0);
     while (1) {
         //ESP_LOGI(TAG, "cnt: %d\n", cnt++);
         cnt++;
@@ -169,24 +193,13 @@ static void IOTestTask(void *arg)
         //gpio_set_level(GPIO_OUTPUT_IO_1, cnt % 2);
     }
 }
+*/
 /**
  * key IO init
  */
 bool BTN_buttonIOInit(void)
 {
     gpio_config_t io_conf;
-    //disable interrupt
-    io_conf.intr_type = GPIO_INTR_DISABLE;
-    //set as output mode
-    io_conf.mode = GPIO_MODE_OUTPUT;
-    //bit mask of the pins that you want to set,e.g.GPIO15/16
-    io_conf.pin_bit_mask = GPIO_OUTPUT_PIN_SEL;
-    //disable pull-down mode
-    io_conf.pull_down_en = 0;
-    //disable pull-up mode
-    io_conf.pull_up_en = 0;
-    //configure GPIO with the given settings
-    gpio_config(&io_conf);
 
     //interrupt of any edge(下降沿和上升沿触发中断)
     io_conf.intr_type = GPIO_INTR_ANYEDGE;//GPIO_INTR_ANYEDGE;//GPIO_INTR_NEGEDGE

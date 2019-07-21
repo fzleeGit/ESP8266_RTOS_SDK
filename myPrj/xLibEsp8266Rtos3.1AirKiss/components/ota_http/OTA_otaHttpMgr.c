@@ -1,11 +1,10 @@
-/* OTA example
+/*
+ * @Author: Xman 
+ * @Date: 2019-07-11 10:33:19 
+ * @Last Modified by: Xman
+ * @Last Modified time: 2019-07-11 12:49:35
+ */
 
-   This example code is in the Public Domain (or CC0 licensed, at your option.)
-
-   Unless required by applicable law or agreed to in writing, this
-   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-   CONDITIONS OF ANY KIND, either express or implied.
-*/
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -23,12 +22,15 @@
 
 #include "nvs.h"
 #include "nvs_flash.h"
+#include "WIFI_wifiMgr.h"
+#include "OTA_otaHttpMgr.h"
 
-#define EXAMPLE_WIFI_SSID CONFIG_WIFI_SSID
-#define EXAMPLE_WIFI_PASS CONFIG_WIFI_PASSWORD
-#define EXAMPLE_SERVER_IP   CONFIG_SERVER_IP
-#define EXAMPLE_SERVER_PORT CONFIG_SERVER_PORT
-#define EXAMPLE_FILENAME CONFIG_EXAMPLE_FILENAME
+
+#define EXAMPLE_WIFI_SSID "jnb7"
+#define EXAMPLE_WIFI_PASS "FZLee129"
+#define EXAMPLE_SERVER_IP   "iot.antenic.com"
+#define EXAMPLE_SERVER_PORT "80"
+#define EXAMPLE_FILENAME "/wwwroot/firmware/ota.ota.bin"
 #define BUFFSIZE 1500
 #define TEXT_BUFFSIZE 1024
 
@@ -74,54 +76,13 @@ static EventGroupHandle_t wifi_event_group;
 /* The event group allows multiple bits for each event,
    but we only care about one event - are we connected
    to the AP with an IP? */
-const int CONNECTED_BIT = BIT0;
+static const int CONNECTED_BIT = BIT0;
 
-static esp_err_t event_handler(void *ctx, system_event_t *event)
-{
-    /* For accessing reason codes in case of disconnection */
-    system_event_info_t *info = &event->event_info;
+static const char *pNVSTagOta = "Ota";
+static const char *pNVSOtaEnableFlag = "Ota_enable_flag";
 
-    switch (event->event_id) {
-    case SYSTEM_EVENT_STA_START:
-        esp_wifi_connect();
-        break;
-    case SYSTEM_EVENT_STA_GOT_IP:
-        xEventGroupSetBits(wifi_event_group, CONNECTED_BIT);
-        break;
-    case SYSTEM_EVENT_STA_DISCONNECTED:
-        ESP_LOGE(TAG, "Disconnect reason : %d", info->disconnected.reason);
-        if (info->disconnected.reason == WIFI_REASON_BASIC_RATE_NOT_SUPPORT) {
-            /*Switch to 802.11 bgn mode */
-            esp_wifi_set_protocol(ESP_IF_WIFI_STA, WIFI_PROTOCAL_11B | WIFI_PROTOCAL_11G | WIFI_PROTOCAL_11N);
-        }
-        esp_wifi_connect();
-        xEventGroupClearBits(wifi_event_group, CONNECTED_BIT);
-        break;
-    default:
-        break;
-    }
-    return ESP_OK;
-}
+static int8_t nOtaFlag = 0;
 
-static void initialise_wifi(void)
-{
-    tcpip_adapter_init();
-    wifi_event_group = xEventGroupCreate();
-    ESP_ERROR_CHECK( esp_event_loop_init(event_handler, NULL) );
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK( esp_wifi_init(&cfg) );
-    ESP_ERROR_CHECK( esp_wifi_set_storage(WIFI_STORAGE_RAM) );
-    wifi_config_t wifi_config = {
-        .sta = {
-            .ssid = EXAMPLE_WIFI_SSID,
-            .password = EXAMPLE_WIFI_PASS,
-        },
-    };
-    ESP_LOGI(TAG, "Setting WiFi configuration SSID %s...", wifi_config.sta.ssid);
-    ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_STA) );
-    ESP_ERROR_CHECK( esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config) );
-    ESP_ERROR_CHECK( esp_wifi_start() );
-}
 
 /*read buffer by byte still delim ,return read bytes counts*/
 static int read_until(const char *buffer, char delim, int len)
@@ -356,6 +317,8 @@ static void ota_example_task(void *pvParameter)
     esp_ota_handle_t update_handle = 0 ;
     const esp_partition_t *update_partition = NULL;
 
+    nOtaFlag = 2;
+
     ESP_LOGI(TAG, "Starting OTA example... @ %p flash %s", ota_example_task, CONFIG_ESPTOOLPY_FLASHSIZE);
 
     const esp_partition_t *configured = esp_ota_get_boot_partition();
@@ -471,10 +434,11 @@ static void ota_example_task(void *pvParameter)
         task_fatal_error();
     }
     ESP_LOGI(TAG, "Prepare to restart system!");
+    OTA_clearOtaEnableFlag();
     esp_restart();
     return ;
 }
-
+/*
 void app_main()
 {
     // Initialize NVS.
@@ -490,4 +454,70 @@ void app_main()
 
     initialise_wifi();
     xTaskCreate(&ota_example_task, "ota_example_task", 8192, NULL, 5, NULL);
+}
+ */
+
+void OTA_otaInit(void)
+{
+    WIFI_Smartconfig_Status tSmartConfigStatus;
+    nvs_handle nvshandle;
+    //size_t size = 0;
+    ESP_LOGI(TAG, "start OTA_otaInit");
+    wifi_event_group = xEventGroupCreate();
+    if (nvs_open(pNVSTagOta, NVS_READWRITE, &nvshandle) == ESP_OK) {
+        if (nvs_get_i8(nvshandle, pNVSOtaEnableFlag, &nOtaFlag) == ESP_OK) {
+            tSmartConfigStatus = WIFI_tGetSmartConfigStatus();
+            if(nOtaFlag == true && tSmartConfigStatus == WIFI_NOT_SC) {
+                if(xTaskCreate(&ota_example_task, "ota_example_task", 8192, NULL, 5, NULL) != pdTRUE) {
+                    ESP_LOGE(TAG, "creat OTA task fail");
+                    task_fatal_error();
+                }
+                ESP_LOGI(TAG, "start OTA");
+                //OTA_clearOtaEnableFlag();
+            }
+        } else {
+            ESP_LOGI(TAG, "no need to ota");
+            //OTA_setOtaEnableFlag();
+        }
+        nvs_close(nvshandle);
+    } else {
+        ESP_LOGE(TAG, "Open NVS Table fail");
+    }
+}
+
+void OTA_setOtaEnableFlag(void)
+{
+    nvs_handle nvshandle;
+
+    nOtaFlag = 1;
+    if (nvs_open(pNVSTagOta, NVS_READWRITE, &nvshandle) == ESP_OK) {
+        if (nvs_set_i8(nvshandle, pNVSOtaEnableFlag, nOtaFlag) != ESP_OK) {
+            ESP_LOGE(TAG, "write OTA NVS Table fail");
+        }
+        nvs_close(nvshandle);
+        ESP_LOGI(TAG, "OTA enabled, please restart device");
+    } else {
+        ESP_LOGE(TAG, "Open OTA NVS Table fail");
+    }
+}
+
+void OTA_clearOtaEnableFlag(void)
+{
+    nvs_handle nvshandle;
+
+    if (nvs_open(pNVSTagOta, NVS_READWRITE, &nvshandle) == ESP_OK)
+    {
+        nvs_erase_all(nvshandle);
+        nvs_close(nvshandle);
+    }
+}
+
+int OTA_getOtaEnableFlag(void)
+{
+    return nOtaFlag;
+}
+
+void OTA_setConnectBIT(void)
+{
+    xEventGroupSetBits(wifi_event_group, CONNECTED_BIT);
 }

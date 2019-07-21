@@ -27,6 +27,8 @@
 #include "BTN_buttonMgr.h"
 #include "WIFI_wifiMgr.h"
 #include "LED_ledMgr.h"
+#include "RELAY_relayMgr.h"
+#include "OTA_otaHttpMgr.h"
 
 /**
  *    由于 esp-idf esp8266芯片 rtos3.0 sdk 乐鑫没做微信近场发现的功能，于是动动手指做起来！
@@ -295,6 +297,7 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
 
+    RELAY_relayMgrInit();
     BTN_buttonIOInit();
     LED_ledMgrInit();
 
@@ -313,5 +316,6 @@ void app_main(void)
     printf("esp_read_mac(): %02x:%02x:%02x:%02x:%02x:%02x \n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     printf("--------------------------------------------------------------------------\n\n");
     //initialise_wifi();
+    OTA_otaInit();
     WIFI_creatWifiInitTask();
 }

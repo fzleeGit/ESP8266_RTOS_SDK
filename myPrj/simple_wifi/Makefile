@@ -3,7 +3,7 @@
 # project subdirectory.
 #
 
-PROJECT_NAME := ota
+PROJECT_NAME := simple_wifi
 
 include $(IDF_PATH)/make/project.mk
 
